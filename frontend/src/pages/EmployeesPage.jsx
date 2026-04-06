@@ -1,0 +1,360 @@
+import { useEffect, useState } from 'react'
+import api from '../lib/api'
+import {
+  Card, Button, Input, Select, Modal, PageHeader,
+  Badge, AiBadge, Spinner, EmptyState, ResponsiveTable
+} from '../components/ui'
+import { Plus, Search, Download, Sparkles, Edit, UserX, FileUp, User } from 'lucide-react'
+
+const DEPARTMENTS = ['Engineering', 'Design', 'Marketing', 'Sales', 'HR', 'Finance', 'Operations', 'Product']
+
+export default function EmployeesPage() {
+  const [employees, setEmployees] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [deptFilter, setDeptFilter] = useState('')
+  const [showAdd, setShowAdd] = useState(false)
+  const [showEdit, setShowEdit] = useState(null)
+  const [showDoc, setShowDoc] = useState(null)
+  const [bioLoading, setBioLoading] = useState(null)
+
+  const fetchEmployees = async () => {
+    setLoading(true)
+    try {
+      const params = {}
+      if (search) params.search = search
+      if (deptFilter) params.department = deptFilter
+      const res = await api.get('/employees', { params })
+      setEmployees(res.data)
+    } finally { setLoading(false) }
+  }
+
+  useEffect(() => { fetchEmployees() }, [search, deptFilter])
+
+  const handleDeactivate = async (id) => {
+    if (!confirm('Deactivate this employee?')) return
+    await api.delete(`/employees/${id}`)
+    fetchEmployees()
+  }
+
+  const handleGenerateBio = async (id) => {
+    setBioLoading(id)
+    try {
+      const res = await api.post(`/employees/${id}/generate-bio`)
+      setEmployees(prev => prev.map(e => e.id === id ? { ...e, bio: res.data.bio } : e))
+    } finally { setBioLoading(null) }
+  }
+
+  return (
+    <div className="animate-fadeup">
+      <PageHeader
+        title="Employees"
+        subtitle="Manage your workforce"
+        action={
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" onClick={() => window.open('/api/employees/export-csv', '_blank')} size="sm">
+              <Download size={15} /> <span className="hidden sm:inline">Export CSV</span>
+            </Button>
+            <Button onClick={() => setShowAdd(true)}>
+              <Plus size={15} /> Add Employee
+            </Button>
+          </div>
+        }
+      />
+
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <div className="relative flex-1">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            placeholder="Search name, email, skills..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2.5 text-sm rounded-lg border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+        <select
+          value={deptFilter}
+          onChange={e => setDeptFilter(e.target.value)}
+          className="px-3 py-2.5 text-sm rounded-lg border border-input bg-background focus:outline-none sm:w-48"
+        >
+          <option value="">All Departments</option>
+          {DEPARTMENTS.map(d => <option key={d}>{d}</option>)}
+        </select>
+      </div>
+
+      {loading ? <Spinner /> : (
+        <Card>
+          {employees.length === 0 ? (
+            <EmptyState icon={User} title="No employees found" desc="Add your first employee to get started." />
+          ) : (
+            <ResponsiveTable>
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th className="hidden sm:table-cell">Department</th>
+                  <th className="hidden md:table-cell">Designation</th>
+                  <th className="hidden lg:table-cell">Joining Date</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {employees.map(emp => (
+                  <tr key={emp.id}>
+                    <td>
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-sm font-bold flex-shrink-0">
+                          {emp.name[0]}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-medium text-foreground text-sm truncate max-w-[120px] sm:max-w-none">{emp.name}</div>
+                          <div className="text-xs text-muted-foreground truncate max-w-[120px] sm:max-w-none">{emp.email}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="hidden sm:table-cell">
+                      <Badge variant="muted">{emp.department || '—'}</Badge>
+                    </td>
+                    <td className="hidden md:table-cell text-muted-foreground text-sm">{emp.designation || '—'}</td>
+                    <td className="hidden lg:table-cell text-muted-foreground text-sm">{emp.joining_date || '—'}</td>
+                    <td>
+                      <Badge variant={emp.is_active ? 'success' : 'danger'}>
+                        {emp.is_active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </td>
+                    <td>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleGenerateBio(emp.id)}
+                          title="Generate AI Bio"
+                          className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-primary transition-colors"
+                          disabled={bioLoading === emp.id}
+                        >
+                          {bioLoading === emp.id ? <div className="spinner w-4 h-4" /> : <Sparkles size={15} />}
+                        </button>
+                        <button onClick={() => setShowEdit(emp)} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
+                          <Edit size={15} />
+                        </button>
+                        <button onClick={() => setShowDoc(emp)} className="p-1.5 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
+                          <FileUp size={15} />
+                        </button>
+                        {emp.is_active && (
+                          <button onClick={() => handleDeactivate(emp.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-destructive transition-colors">
+                            <UserX size={15} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </ResponsiveTable>
+          )}
+        </Card>
+      )}
+
+      {/* AI Bios */}
+      {employees.some(e => e.bio) && (
+        <div className="mt-6 space-y-3">
+          <div className="flex items-center gap-2 mb-2">
+            <AiBadge>AI-Generated Bios</AiBadge>
+          </div>
+          {employees.filter(e => e.bio).map(emp => (
+            <Card key={emp.id} className="p-4">
+              <div className="font-medium text-sm mb-1">{emp.name}</div>
+              <p className="text-sm text-muted-foreground">{emp.bio}</p>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <AddEmployeeModal open={showAdd} onClose={() => setShowAdd(false)} onSave={fetchEmployees} />
+      {showEdit && <EditEmployeeModal emp={showEdit} onClose={() => setShowEdit(null)} onSave={fetchEmployees} />}
+      {showDoc && <UploadDocModal emp={showDoc} onClose={() => setShowDoc(null)} />}
+    </div>
+  )
+}
+
+function AddEmployeeModal({ open, onClose, onSave }) {
+  const [form, setForm] = useState({
+    name: '', email: '', designation: '', department: '',
+    joining_date: '', contact: '', skills: '', password: 'pass123', role: 'employee'
+  })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    try {
+      let userId = null
+      try {
+        const userRes = await api.post('/auth/register', {
+          email: form.email,
+          password: form.password,
+          role: form.role,
+          must_change_password: true
+        })
+        userId = userRes.data.id
+      } catch (err) {
+        console.log('User may already exist')
+      }
+      await api.post('/employees', {
+        name: form.name, email: form.email, designation: form.designation,
+        department: form.department, joining_date: form.joining_date,
+        contact: form.contact, skills: form.skills, user_id: userId
+      })
+      onSave()
+      onClose()
+      setForm({ name: '', email: '', designation: '', department: '', joining_date: '', contact: '', skills: '', password: 'pass123', role: 'employee' })
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Error creating employee')
+    } finally { setLoading(false) }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Add New Employee" size="lg">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {error && (
+          <div className="text-sm text-destructive bg-destructive/5 border border-destructive/20 rounded-lg px-3 py-2">
+            {error}
+          </div>
+        )}
+
+        {/* Personal Info */}
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Personal Information</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input label="Full Name *" value={form.name} onChange={e => set('name', e.target.value)} required placeholder="John Doe" />
+            <Input label="Email Address *" type="email" value={form.email} onChange={e => set('email', e.target.value)} required placeholder="john@company.com" />
+            <Input label="Contact Number" value={form.contact} onChange={e => set('contact', e.target.value)} placeholder="9876543210" />
+            <Input label="Joining Date" type="date" value={form.joining_date} onChange={e => set('joining_date', e.target.value)} />
+          </div>
+        </div>
+
+        {/* Job Info */}
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Job Information</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input label="Designation" value={form.designation} onChange={e => set('designation', e.target.value)} placeholder="Software Engineer" />
+            <Select label="Department" value={form.department} onChange={e => set('department', e.target.value)}>
+              <option value="">Select department</option>
+              {DEPARTMENTS.map(d => <option key={d}>{d}</option>)}
+            </Select>
+          </div>
+          <div className="mt-4">
+            <Input label="Skills (comma-separated)" value={form.skills} onChange={e => set('skills', e.target.value)} placeholder="React, Python, SQL, Docker" />
+          </div>
+        </div>
+
+        {/* Login Info */}
+        <div>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Login Credentials</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input label="Temporary Password" value={form.password} onChange={e => set('password', e.target.value)} placeholder="pass123" />
+            <Select label="Role" value={form.role} onChange={e => set('role', e.target.value)}>
+              <option value="employee">Employee</option>
+              <option value="manager">Manager</option>
+              <option value="admin">Admin</option>
+            </Select>
+          </div>
+          <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
+            ⚠️ Employee will be forced to change this password on first login.
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row justify-end gap-3 pt-2 border-t border-border">
+          <Button variant="outline" type="button" onClick={onClose} className="w-full sm:w-auto">Cancel</Button>
+          <Button type="submit" loading={loading} className="w-full sm:w-auto">Create Employee</Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function EditEmployeeModal({ emp, onClose, onSave }) {
+  const [form, setForm] = useState({
+    name: emp.name, designation: emp.designation || '',
+    department: emp.department || '', contact: emp.contact || '', skills: emp.skills || ''
+  })
+  const [loading, setLoading] = useState(false)
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      await api.put(`/employees/${emp.id}`, form)
+      onSave(); onClose()
+    } finally { setLoading(false) }
+  }
+
+  return (
+    <Modal open={true} onClose={onClose} title={`Edit — ${emp.name}`} size="md">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Input label="Full Name" value={form.name} onChange={e => set('name', e.target.value)} />
+          <Input label="Designation" value={form.designation} onChange={e => set('designation', e.target.value)} />
+          <Select label="Department" value={form.department} onChange={e => set('department', e.target.value)}>
+            <option value="">Select</option>
+            {DEPARTMENTS.map(d => <option key={d}>{d}</option>)}
+          </Select>
+          <Input label="Contact" value={form.contact} onChange={e => set('contact', e.target.value)} />
+        </div>
+        <Input label="Skills (comma-separated)" value={form.skills} onChange={e => set('skills', e.target.value)} />
+        <div className="flex flex-col sm:flex-row justify-end gap-3 pt-2 border-t border-border">
+          <Button variant="outline" type="button" onClick={onClose} className="w-full sm:w-auto">Cancel</Button>
+          <Button type="submit" loading={loading} className="w-full sm:w-auto">Save Changes</Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function UploadDocModal({ emp, onClose }) {
+  const [file, setFile] = useState(null)
+  const [docType, setDocType] = useState('Offer Letter')
+  const [loading, setLoading] = useState(false)
+
+  const handleUpload = async (e) => {
+    e.preventDefault()
+    if (!file) return
+    setLoading(true)
+    const form = new FormData()
+    form.append('file', file)
+    form.append('doc_type', docType)
+    try {
+      await api.post(`/employees/${emp.id}/upload-document`, form)
+      alert('Document uploaded successfully')
+      onClose()
+    } finally { setLoading(false) }
+  }
+
+  return (
+    <Modal open={true} onClose={onClose} title={`Upload Document — ${emp.name}`} size="sm">
+      <form onSubmit={handleUpload} className="space-y-4">
+        <Select label="Document Type" value={docType} onChange={e => setDocType(e.target.value)}>
+          {['Offer Letter', 'ID Proof', 'Contract', 'NDA', 'Other'].map(t => <option key={t}>{t}</option>)}
+        </Select>
+        <div>
+          <label className="text-sm font-medium block mb-1.5">File</label>
+          <input
+            type="file"
+            onChange={e => setFile(e.target.files[0])}
+            className="text-sm w-full"
+            accept=".pdf,.doc,.docx,.png,.jpg"
+          />
+        </div>
+        <div className="flex flex-col sm:flex-row justify-end gap-3 pt-2 border-t border-border">
+          <Button variant="outline" type="button" onClick={onClose} className="w-full sm:w-auto">Cancel</Button>
+          <Button type="submit" loading={loading} disabled={!file} className="w-full sm:w-auto">
+            <FileUp size={15} /> Upload
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
