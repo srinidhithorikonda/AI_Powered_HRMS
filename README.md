@@ -60,7 +60,7 @@
 
 <div align="center">
 
-### 📽️ [▶ Watch Full 5-Minute Demo →](https://drive.google.com/file/d/1lwbVJ_nQ5bfkbXA--kcuVNbJxPAU6Gkk/view)
+### 📽️ [▶ Watch Full 5-Minute Demo →](YOUR_DEMO_VIDEO_LINK_HERE)
 *Complete walkthrough of all 7 modules with live AI features in action*
 
 </div>
